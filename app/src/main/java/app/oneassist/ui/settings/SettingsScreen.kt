@@ -102,6 +102,8 @@ class SettingsViewModel(private val assistant: AssistantRepository) : ViewModel(
                 onSaved()
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: IllegalArgumentException) {
+                _state.update { it.copy(saving = false, message = "That key contains spaces or invalid characters. Paste it again.") }
             } catch (e: Exception) {
                 _state.update { it.copy(saving = false, message = "Could not save the key. Please try again.") }
             }

@@ -60,8 +60,10 @@ jobs:
           name: OneAssist-apk
           path: OneAssist.apk
 
+      # Only a release-signed APK is published. A debug APK is debuggable (run-as, debugger) and
+      # signed with a throwaway key, so it must never become the build installed on the phone.
       - name: Publish as latest release
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && steps.signing.outputs.signed == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest

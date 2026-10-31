@@ -17,6 +17,9 @@ class ApiKeyStore(context: Context) {
     fun save(apiKey: String) {
         val trimmed = apiKey.trim()
         require(trimmed.isNotEmpty()) { "API key is empty" }
+        // Only printable ASCII: OkHttp's header check would otherwise throw an exception whose
+        // message contains the header value (the key). Never include the key in this message.
+        require(trimmed.all { it in '!'..'~' }) { "API key contains invalid characters" }
         val blob = cipher.encrypt(trimmed.toByteArray(Charsets.UTF_8))
         prefs.edit().putString(PREF_KEY, Base64.encodeToString(blob, Base64.NO_WRAP)).apply()
     }
