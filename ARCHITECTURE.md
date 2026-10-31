@@ -74,7 +74,7 @@ category in the UI, a learned rule is saved with higher priority than the defaul
 - Database encrypted with SQLCipher; the key is random, wrapped by an Android Keystore key.
 - Biometric / device credential lock on launch and after 60 s in the background. FLAG_SECURE on.
 - `allowBackup=false`, backup and device-transfer rules exclude everything.
-- Network security config: HTTPS only. The only host contacted is api.anthropic.com.
+- Network security config: HTTPS only. The app itself only contacts api.anthropic.com (ML Kit text recognition may send anonymous Google usage telemetry; no financial data).
 - API key stored encrypted with a Keystore key, never logged.
 - Release APK signed with a key kept only in GitHub secrets.
 

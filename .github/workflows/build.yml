@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -62,8 +62,20 @@ jobs:
 
       # Only a release-signed APK is published. A debug APK is debuggable (run-as, debugger) and
       # signed with a throwaway key, so it must never become the build installed on the phone.
+    outputs:
+      signed: ${{ steps.signing.outputs.signed }}
+
+  release:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.build.outputs.signed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: OneAssist-apk
       - name: Publish as latest release
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && steps.signing.outputs.signed == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
