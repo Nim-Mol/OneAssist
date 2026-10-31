@@ -30,6 +30,12 @@ data class Transaction(
     val description: String,
     val categoryId: String? = null,
     val source: ImportSource,
+    /**
+     * True when the counterparty is probably a person or one of the user's own accounts (a bank
+     * transfer rather than a card or merchant payment). Such names are never sent to the assistant
+     * and never become subscriptions or leaks.
+     */
+    val peerToPeer: Boolean = false,
 )
 
 /** A parsed transaction before it gets an id and category. */
@@ -41,6 +47,8 @@ data class RawTransaction(
     val counterparty: String,
     val description: String,
     val source: ImportSource,
+    /** See [Transaction.peerToPeer]. */
+    val peerToPeer: Boolean = false,
 )
 
 /** Result of parsing a file or text: good rows plus lines that were skipped and why. */
@@ -59,6 +67,7 @@ data class CategoryRule(
 
 enum class Cadence(val approxDays: Int) { WEEKLY(7), MONTHLY(30), QUARTERLY(91), YEARLY(365) }
 
+/** A detected recurring charge. [amountCents] and [monthlyCostCents] are positive costs. */
 data class Subscription(
     val merchant: String,
     val amountCents: Long,
