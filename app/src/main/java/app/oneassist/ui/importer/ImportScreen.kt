@@ -233,12 +233,19 @@ private fun SourceCard(
     }
 }
 
-/** Chips to choose ING, Revolut or the credit card. */
+/** Accounts a bank screenshot can come from. Cash is only for manual entries. */
+val importableAccounts: List<AccountSource> = AccountSource.entries.filter { it != AccountSource.CASH }
+
+/** Chips to choose ING, Revolut or the credit card (plus cash when [accounts] includes it). */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun AccountSelector(selected: AccountSource, onSelect: (AccountSource) -> Unit) {
+fun AccountSelector(
+    selected: AccountSource,
+    onSelect: (AccountSource) -> Unit,
+    accounts: List<AccountSource> = importableAccounts,
+) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        AccountSource.entries.forEach { account ->
+        accounts.forEach { account ->
             FilterChip(
                 selected = account == selected,
                 onClick = { onSelect(account) },

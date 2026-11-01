@@ -37,6 +37,7 @@ import androidx.lifecycle.viewModelScope
 import app.oneassist.core.Leak
 import app.oneassist.core.LeakType
 import app.oneassist.core.SavingsTip
+import app.oneassist.core.TagTotal
 import app.oneassist.data.FinanceRepository
 import app.oneassist.ui.appViewModel
 import app.oneassist.ui.components.Badge
@@ -48,14 +49,20 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import java.time.YearMonth
 
-data class InsightsUiState(val leaks: List<Leak>, val tips: List<SavingsTip>)
+data class InsightsUiState(val leaks: List<Leak>, val tips: List<SavingsTip>, val tags: List<TagTotal> = emptyList())
 
 class InsightsViewModel(repository: FinanceRepository) : ViewModel() {
-    val state: StateFlow<InsightsUiState?> = combine(repository.leaks(), repository.savingsTips()) { leaks, tips ->
+    val state: StateFlow<InsightsUiState?> = combine(
+        repository.leaks(),
+        repository.savingsTips(),
+        repository.tagTotals(YearMonth.now()),
+    ) { leaks, tips, tags ->
         InsightsUiState(
             leaks = leaks.sortedByDescending { it.monthlyImpactCents },
             tips = tips.sortedByDescending { it.estimatedMonthlySavingCents },
+            tags = tags,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 }
@@ -73,7 +80,7 @@ fun InsightsScreen() {
         val current = state
         when {
             current == null -> LoadingState(Modifier.padding(padding))
-            current.leaks.isEmpty() && current.tips.isEmpty() -> EmptyState(
+            current.leaks.isEmpty() && current.tips.isEmpty() && current.tags.isEmpty() -> EmptyState(
                 icon = Icons.Outlined.Lightbulb,
                 title = "Nothing to flag yet",
                 message = "Once OneAssist has a few weeks of transactions it will point out money leaks " +
@@ -98,6 +105,9 @@ fun InsightsScreen() {
                         }
                     }
                     itemsIndexed(current.leaks, key = { i, leak -> "leak-$i-${leak.title}" }) { _, leak -> LeakCard(leak) }
+                }
+                if (current.tags.isNotEmpty()) {
+                    item(key = "tags") { TagsCard(current.tags) }
                 }
                 if (current.tips.isNotEmpty()) {
                     item {
@@ -158,6 +168,43 @@ private fun LeakCard(leak: Leak) {
         }
     }
 }
+
+@Composable
+private fun TagsCard(tags: List<TagTotal>) {
+    Column {
+        SectionTitle("Tags this month")
+        OutlinedCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                tags.take(MAX_TAG_ROWS).forEach { t ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("#${t.tag}", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                if (t.count == 1) "1 transaction" else "${t.count} transactions",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            if (t.spendingCents != 0L || t.incomeCents == 0L) {
+                                Text("spent ${formatMoney(t.spendingCents)}", style = MaterialTheme.typography.bodyMedium)
+                            }
+                            if (t.incomeCents != 0L) {
+                                Text(
+                                    "in ${formatMoney(t.incomeCents)}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private const val MAX_TAG_ROWS = 20
 
 @Composable
 private fun TipCard(tip: SavingsTip) {

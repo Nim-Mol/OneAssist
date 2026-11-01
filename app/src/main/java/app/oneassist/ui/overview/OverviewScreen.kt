@@ -26,6 +26,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -112,6 +113,9 @@ private fun OverviewContent(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item { SpendingCard(state) }
+        if (state.summary.incomeCents > 0 || state.expectedIncome.isNotEmpty()) {
+            item { IncomeCard(state) }
+        }
         if (state.topCategories.isNotEmpty()) {
             item { TopCategoriesCard(state.topCategories) }
         }
@@ -188,6 +192,77 @@ private fun SpendingCard(state: OverviewUiState) {
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.primary,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun IncomeCard(state: OverviewUiState) {
+    val summary = state.summary
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Income", style = MaterialTheme.typography.titleMedium)
+            state.incomeByCategory.forEach { line ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        line.name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(formatMoney(line.cents), style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            summary.savingsRate?.let { rate ->
+                HorizontalDivider()
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Savings rate", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Share of income not spent",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        "${Math.round(rate * 100)} %",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = if (rate < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+            if (state.expectedIncome.isNotEmpty()) {
+                HorizontalDivider()
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Expected income this month", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text(formatMoney(state.expectedTotalCents), style = MaterialTheme.typography.bodyMedium)
+                }
+                state.expectedIncome.forEach { line ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "${line.name} · ${line.categoryName} · day ${line.day}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            if (line.received) "received" else formatMoney(line.amountCents),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (line.received) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                if (state.stillToComeCents > 0) {
+                    Text(
+                        "${formatMoney(state.stillToComeCents)} still to come",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
         }
     }
