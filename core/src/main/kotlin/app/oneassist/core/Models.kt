@@ -2,8 +2,8 @@ package app.oneassist.core
 
 import java.time.LocalDate
 
-/** Where money lives. One entry per real account. */
-enum class AccountSource { ING, REVOLUT, CREDIT_CARD }
+/** Where money lives. One entry per real account; CASH is for manual entries only. */
+enum class AccountSource { ING, REVOLUT, CREDIT_CARD, CASH }
 
 /** How a transaction reached the app. Used for de-duplication and trust. */
 enum class ImportSource { NOTIFICATION, CSV, SCREENSHOT, MANUAL }
@@ -36,6 +36,12 @@ data class Transaction(
      * and never become subscriptions or leaks.
      */
     val peerToPeer: Boolean = false,
+    /** Free-form user tags, normalized with [Tags.normalizeAll]. */
+    val tags: Set<String> = emptySet(),
+    /** The user's own note (manual entries). Stays on the device; never sent to the assistant. */
+    val note: String = "",
+    /** Manual income the user expects every month (see [IncomeInsights.expectedIncome]). */
+    val recurring: Boolean = false,
 )
 
 /** A parsed transaction before it gets an id and category. */

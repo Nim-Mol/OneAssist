@@ -10,6 +10,8 @@ import java.time.temporal.ChronoUnit
  * Privacy: the context holds totals per category and month, the top merchants by spend
  * (normalized names of merchant payments only), subscriptions and leaks. Descriptions, IBANs,
  * account numbers and names from transfers are never included; transfers appear only as totals.
+ * Income appears per income category only (never the payer), user tags only as totals, and the
+ * user's notes are never included.
  */
 class DefaultAssistantPromptBuilder : AssistantPromptBuilder {
 
@@ -64,10 +66,32 @@ class DefaultAssistantPromptBuilder : AssistantPromptBuilder {
         for (m in months) {
             val t = totalsByMonth.getValue(m)
             val label = if (m == thisMonth) "$m (month to date)" else m.toString()
+            val rate = t.savingsRate?.let { ", savings rate ${Math.round(it * 100)}%" } ?: ""
             sb.appendLine("- $label: income ${money(t.incomeCents)}, spending ${money(t.spendingCents)}, " +
-                "net ${money(t.incomeCents - t.spendingCents)}, saved/invested ${money(t.savingsCents)}")
+                "net ${money(t.incomeCents - t.spendingCents)}, saved/invested ${money(t.savingsCents)}$rate")
         }
         sb.appendLine()
+
+        // Income per income category (category names only, never who paid).
+        sb.appendLine("## Income by category (${months.joinToString(" | ")})")
+        val incomeIds = totalsByMonth.values.flatMap { it.incomeByCategory.keys }.distinct()
+            .sortedByDescending { id -> totalsByMonth.values.sumOf { it.incomeByCategory[id] ?: 0L } }
+        if (incomeIds.isEmpty()) sb.appendLine("- none")
+        for (id in incomeIds) {
+            val values = months.joinToString(" | ") { m -> money(totalsByMonth.getValue(m).incomeByCategory[id] ?: 0L) }
+            sb.appendLine("- ${safe(names[id] ?: id)}: $values")
+        }
+        sb.appendLine()
+
+        // User tags this month, totals only.
+        val tagTotals = Ledger.totalsByTag(Ledger.inMonth(inWindow, thisMonth), categories).take(MAX_TAGS)
+        if (tagTotals.isNotEmpty()) {
+            sb.appendLine("## Totals per user tag ($thisMonth, month to date)")
+            tagTotals.forEach { tt ->
+                sb.appendLine("- ${safe(tt.tag, Tags.MAX_LENGTH)}: spending ${money(tt.spendingCents)}, income ${money(tt.incomeCents)}")
+            }
+            sb.appendLine()
+        }
 
         // Spending per category per month.
         sb.appendLine("## Spending by category (${months.joinToString(" | ")})")
@@ -121,6 +145,7 @@ class DefaultAssistantPromptBuilder : AssistantPromptBuilder {
     companion object {
         private val IBAN = Regex("\\b[A-Z]{2}\\d{2}[A-Z0-9]{4}\\d{7,}[A-Z0-9]*\\b", RegexOption.IGNORE_CASE)
         private val LONG_NUMBER = Regex("\\d{6,}")
+        private const val MAX_TAGS = 15
 
         /**
          * Makes a merchant or label safe to embed: no IBANs or long numbers, no tag characters that

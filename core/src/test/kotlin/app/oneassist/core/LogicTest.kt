@@ -35,7 +35,7 @@ class CategorizerTest {
         assertEquals(DefaultCategories.UTILITIES, c.categorize("Ziggo Services BV", "", -6000))
         assertEquals(DefaultCategories.HEALTH_INSURANCE, c.categorize("Zilveren Kruis Achmea", "", -14000))
         assertEquals(DefaultCategories.HEALTH_INSURANCE, c.categorize("CZ Groep", "", -14000))
-        assertEquals(DefaultCategories.INCOME, c.categorize("Werkgever B.V.", "Overschrijving | Salaris oktober", 300000))
+        assertEquals(DefaultCategories.SALARY, c.categorize("Werkgever B.V.", "Overschrijving | Salaris oktober", 300000))
         assertEquals(DefaultCategories.HOUSING, c.categorize("Woningstichting X", "Online bankieren | Huur november", -95000))
         assertEquals(DefaultCategories.TRANSFERS, c.categorize("Revolut Bank UAB", "Online bankieren", -10000))
         assertEquals(DefaultCategories.BANK_FEES, c.categorize("Revolut fee", "FEE | ATM", -175))

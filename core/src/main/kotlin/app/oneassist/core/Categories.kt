@@ -16,7 +16,14 @@ object DefaultCategories {
     const val CASH = "cash"
     const val TAXES = "taxes"
     const val BANK_FEES = "bank_fees"
+    /** "Other income". The id stays "income" so older references keep working. */
     const val INCOME = "income"
+    const val SALARY = "salary"
+    const val FREELANCE = "freelance"
+    const val BENEFITS = "benefits"
+    const val REFUNDS = "refunds"
+    const val GIFTS_RECEIVED = "gifts_received"
+    const val INTEREST_INCOME = "interest_income"
     const val SAVINGS = "savings"
     const val TRANSFERS = "transfers"
     /** Used as the key for spending without a category (categoryId == null). */
@@ -38,10 +45,19 @@ object DefaultCategories {
         Category(CASH, "Cash withdrawals", CategoryKind.DISCRETIONARY),
         Category(BANK_FEES, "Bank fees & interest", CategoryKind.DISCRETIONARY),
         Category(UNCATEGORIZED, "Uncategorized", CategoryKind.DISCRETIONARY),
-        Category(INCOME, "Income", CategoryKind.INCOME),
+        Category(SALARY, "Salary", CategoryKind.INCOME),
+        Category(FREELANCE, "Freelance & side income", CategoryKind.INCOME),
+        Category(BENEFITS, "Benefits & allowances", CategoryKind.INCOME),
+        Category(REFUNDS, "Refunds & tax returns", CategoryKind.INCOME),
+        Category(GIFTS_RECEIVED, "Gifts received", CategoryKind.INCOME),
+        Category(INTEREST_INCOME, "Interest & investments", CategoryKind.INCOME),
+        Category(INCOME, "Other income", CategoryKind.INCOME),
         Category(SAVINGS, "Savings & investing", CategoryKind.SAVINGS),
         Category(TRANSFERS, "Transfers", CategoryKind.TRANSFER),
     )
+
+    /** Ids of the shipped income categories, in display order. */
+    val incomeIds: List<String> = all.filter { it.kind == CategoryKind.INCOME }.map { it.id }
 }
 
 /**
@@ -57,9 +73,20 @@ object DefaultRules {
             "revolut fee", "kosten betaalpakket", "betaalpakket", "kosten oranjepakket", "ing kosten", "bankkosten",
             "fee", "fees", "debetrente", "rente roodstand", "interest charge", "transactiekosten", "koersverschil",
             "plan fee", "premium plan", "metal plan"))
-        addAll(rules(DefaultCategories.INCOME, 15,
-            "salaris", "salary", "loon", "payroll", "uwv", "svb", "zorgtoeslag", "huurtoeslag", "kinderbijslag",
-            "kindgebonden budget", "belastingteruggave", "vakantiegeld", "eindejaarsuitkering"))
+        // Income rules only apply to money coming in (see RuleCategorizer).
+        addAll(rules(DefaultCategories.SALARY, 15,
+            "salaris", "salary", "loon", "nettoloon", "payroll", "vakantiegeld", "eindejaarsuitkering", "13e maand",
+            "dertiende maand", "loonstrook"))
+        addAll(rules(DefaultCategories.BENEFITS, 16,
+            "uwv", "svb", "toeslag", "toeslagen", "dienst toeslagen", "zorgtoeslag", "huurtoeslag", "kinderopvangtoeslag",
+            "kinderbijslag", "kindgebonden budget", "ww-uitkering", "uitkering", "studiefinanciering"))
+        // Tax returns. A shop refund stays in the shop's category, where it lowers that spending.
+        addAll(rules(DefaultCategories.REFUNDS, 16,
+            "belastingteruggave", "teruggave", "teruggaaf", "voorlopige teruggaaf", "inkomstenbelasting teruggaaf"))
+        addAll(rules(DefaultCategories.FREELANCE, 14,
+            "factuur", "invoice", "freelance", "honorarium", "vinted", "marktplaats"))
+        addAll(rules(DefaultCategories.INTEREST_INCOME, 14,
+            "rente bijschrijving", "creditrente", "interest earned", "interest payment", "dividend", "dividenduitkering"))
         addAll(rules(DefaultCategories.TRANSFERS, 10,
             "revolut", "revolut bank", "to pocket", "from pocket", "pocket", "savings vault", "eigen rekening",
             "top-up", "topup", "opwaardering", "exchanged to", "exchanged from", "oranje spaarrekening"))
@@ -119,7 +146,11 @@ object DefaultRules {
  * Rule-based categorizer. Rules are checked highest priority first; merchant matches beat
  * description matches. Patterns match whole words so "ns" does not match "transactie".
  */
-class RuleCategorizer(rules: List<CategoryRule>) : Categorizer {
+class RuleCategorizer(
+    rules: List<CategoryRule>,
+    /** Rules for these categories (income) are only used for money coming in. */
+    private val incomeCategoryIds: Set<String> = DefaultCategories.incomeIds.toSet(),
+) : Categorizer {
     private data class Compiled(val rule: CategoryRule, val regex: Regex)
 
     private val compiled: List<Compiled> = rules
@@ -128,13 +159,24 @@ class RuleCategorizer(rules: List<CategoryRule>) : Categorizer {
         .map { Compiled(it, wordRegex(it.pattern)) }
 
     override fun categorize(merchant: String, description: String, amountCents: Long): String? {
+        val incoming = amountCents > 0
+        val usable = if (incoming) compiled else compiled.filter { it.rule.categoryId !in incomeCategoryIds }
         val m = merchant.lowercase()
         val normalized = MerchantNormalizer.normalize(merchant).lowercase()
-        compiled.firstOrNull { it.regex.containsMatchIn(m) || it.regex.containsMatchIn(normalized) }?.let { return it.rule.categoryId }
         // Wallet names appear in card payment notes and say nothing about the merchant.
         val d = description.lowercase().replace("apple pay", " ").replace("google pay", " ")
+        val byMerchant = usable.firstOrNull { it.regex.containsMatchIn(m) || it.regex.containsMatchIn(normalized) }
+        if (byMerchant != null) {
+            // Money in from a payer such as the Belastingdienst: a default (non-learned) expense rule on
+            // the payer name loses to an income word in the description ("zorgtoeslag", "teruggaaf").
+            if (incoming && !byMerchant.rule.learnedFromUser && byMerchant.rule.categoryId !in incomeCategoryIds && d.isNotBlank()) {
+                usable.firstOrNull { it.rule.categoryId in incomeCategoryIds && it.regex.containsMatchIn(d) }
+                    ?.let { return it.rule.categoryId }
+            }
+            return byMerchant.rule.categoryId
+        }
         if (d.isBlank()) return null
-        return compiled.firstOrNull { it.regex.containsMatchIn(d) }?.rule?.categoryId
+        return usable.firstOrNull { it.regex.containsMatchIn(d) }?.rule?.categoryId
     }
 
     companion object {

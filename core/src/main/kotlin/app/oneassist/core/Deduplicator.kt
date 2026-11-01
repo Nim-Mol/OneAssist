@@ -19,9 +19,14 @@ data class DedupPlan(
  * amount are equal, dates are within [windowDays] days and the normalized merchants match.
  * Each existing row matches at most one incoming row, so two genuine identical coffees on the
  * same day survive a re-import. CSV wins over notification and screenshot rows.
+ * Manual rows are never replaced or removed: an import that matches one is counted as a duplicate,
+ * so the user's own entry (with its tags and note) stays.
  */
 object Deduplicator {
     const val windowDays = 3L
+
+    /** Sources a CSV row may overwrite. Never MANUAL. */
+    val replaceableByCsv = setOf(ImportSource.NOTIFICATION, ImportSource.SCREENSHOT)
 
     fun plan(incoming: List<RawTransaction>, existing: List<Transaction>): DedupPlan {
         val consumed = HashSet<String>()
@@ -42,7 +47,7 @@ object Deduplicator {
             )
             if (match == null) { insert += raw; continue }
             consumed += match.id
-            if (raw.source == ImportSource.CSV && match.source in setOf(ImportSource.NOTIFICATION, ImportSource.SCREENSHOT)) {
+            if (raw.source == ImportSource.CSV && match.source in replaceableByCsv) {
                 replace += match.id to raw
             } else {
                 duplicates++
