@@ -26,6 +26,7 @@ android {
         if (keystorePath != null) {
             create("release") {
                 storeFile = file(keystorePath)
+                storeType = "pkcs12"
                 storePassword = System.getenv("ONEASSIST_KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("ONEASSIST_KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "oneassist"
                 keyPassword = System.getenv("ONEASSIST_KEY_PASSWORD")?.takeIf { it.isNotBlank() } ?: storePassword
