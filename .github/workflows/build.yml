@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -31,8 +31,8 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.ONEASSIST_KEYSTORE_BASE64 }}
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/oneassist.jks"
-            echo "ONEASSIST_KEYSTORE=$RUNNER_TEMP/oneassist.jks" >> "$GITHUB_ENV"
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/oneassist.p12"
+            echo "ONEASSIST_KEYSTORE=$RUNNER_TEMP/oneassist.p12" >> "$GITHUB_ENV"
             echo "signed=true" >> "$GITHUB_OUTPUT"
           else
             echo "No signing key secret set: building a debug APK instead."
@@ -60,8 +60,22 @@ jobs:
           name: OneAssist-apk
           path: OneAssist.apk
 
+      # Only a release-signed APK is published. A debug APK is debuggable (run-as, debugger) and
+      # signed with a throwaway key, so it must never become the build installed on the phone.
+    outputs:
+      signed: ${{ steps.signing.outputs.signed }}
+
+  release:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.build.outputs.signed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: OneAssist-apk
       - name: Publish as latest release
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest

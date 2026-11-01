@@ -26,9 +26,10 @@ android {
         if (keystorePath != null) {
             create("release") {
                 storeFile = file(keystorePath)
+                storeType = "pkcs12"
                 storePassword = System.getenv("ONEASSIST_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("ONEASSIST_KEY_ALIAS")
-                keyPassword = System.getenv("ONEASSIST_KEY_PASSWORD")
+                keyAlias = System.getenv("ONEASSIST_KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "oneassist"
+                keyPassword = System.getenv("ONEASSIST_KEY_PASSWORD")?.takeIf { it.isNotBlank() } ?: storePassword
             }
         }
     }
@@ -64,6 +65,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.process)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

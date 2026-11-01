@@ -62,10 +62,34 @@ Rules (`CategoryRule`) match on normalized merchant or description, highest prio
 Dutch starter set (Albert Heijn, Jumbo, NS, Ziggo, KPN, Thuisbezorgd, ...). When the user changes a
 category in the UI, a learned rule is saved with higher priority than the defaults.
 
+### Income
+Income categories: Salary, Freelance & side income, Benefits & allowances (toeslagen, kinderbijslag),
+Refunds & tax returns, Gifts received, Interest & investments, Other income (id `income`). Income rules
+only apply to money coming in. Incoming bank transfers (`peerToPeer`) count as transfers until the
+user marks them as income: that sets an income category and clears `peerToPeer`. "Always treat
+payments from X as ..." saves a learned income rule (id `learned-income:<pattern>`, ranked just above
+other learned rules), so later imports from that payer are income too; payments *to* X are unaffected.
+The Overview shows income per income category and the savings rate, (income - spending) / income.
+
+### Tags
+Free-form user tags on transactions (`holiday-2026`, `work`, `gift`): trimmed, lowercase, other
+characters become `-`, at most 30 characters and 10 per transaction (`core/Tags`). Stored in one
+column as `,a,b,` so a tag filter is an exact `instr` match. Transactions can be filtered by tag;
+Insights lists spending and income per tag for the month.
+
+### Manual entry
+"Add transaction" (FAB on Transactions): income or expense, amount, date, name, account (ING, Revolut,
+credit card or Cash), category, tags and an optional note. Source `MANUAL`; manual rows skip de-dup on
+insert and are never replaced or removed by it (a matching import counts as a duplicate). Manual income
+can be marked "repeats monthly": the latest such entry per payer and category is shown on the Overview
+as expected income for every later month until it is switched off, with "received" once matching
+income arrives. Notes stay on the device.
+
 ## Assistant (optional)
 - Model: Claude Haiku via the Anthropic Messages API. The user pastes their own API key in Settings.
-- The prompt contains only aggregates: monthly totals per category, top merchants by spend,
-  subscriptions, detected leaks. No IBANs, account numbers, people's names or raw descriptions.
+- The prompt contains only aggregates: monthly totals per category, income per income category and
+  savings rate, totals per user tag (sanitized), top merchants by spend, subscriptions, detected leaks.
+  No IBANs, account numbers, people's names, payers of income, notes or raw descriptions.
 - Read-only by design: the assistant has no tools and cannot act. Merchant names are wrapped as
   data, so prompt injection through them cannot trigger anything.
 - Cost target: a few cents per conversation.
@@ -74,7 +98,7 @@ category in the UI, a learned rule is saved with higher priority than the defaul
 - Database encrypted with SQLCipher; the key is random, wrapped by an Android Keystore key.
 - Biometric / device credential lock on launch and after 60 s in the background. FLAG_SECURE on.
 - `allowBackup=false`, backup and device-transfer rules exclude everything.
-- Network security config: HTTPS only. The only host contacted is api.anthropic.com.
+- Network security config: HTTPS only. The app itself only contacts api.anthropic.com (ML Kit text recognition may send anonymous Google usage telemetry; no financial data).
 - API key stored encrypted with a Keystore key, never logged.
 - Release APK signed with a key kept only in GitHub secrets.
 
