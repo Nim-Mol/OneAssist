@@ -13,6 +13,34 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE date BETWEEN :from AND :to ORDER BY date DESC, createdAt DESC")
     fun observeBetween(from: LocalDate, to: LocalDate): Flow<List<TransactionEntity>>
 
+    /** Rows of the period carrying [tag] (normalized). Tags are stored as ",a,b," so this matches whole tags. */
+    @Query(
+        "SELECT * FROM transactions WHERE date BETWEEN :from AND :to AND instr(tags, ',' || :tag || ',') > 0 " +
+            "ORDER BY date DESC, createdAt DESC"
+    )
+    fun observeBetweenWithTag(from: LocalDate, to: LocalDate, tag: String): Flow<List<TransactionEntity>>
+
+    /** Encoded tag column of every tagged row; split in the repository. */
+    @Query("SELECT DISTINCT tags FROM transactions WHERE tags != ''")
+    fun observeTagColumns(): Flow<List<String>>
+
+    @Query("SELECT * FROM transactions WHERE recurring = 1 AND amountCents > 0")
+    fun observeRecurringIncome(): Flow<List<TransactionEntity>>
+
+    @Query("UPDATE transactions SET tags = :tags WHERE id = :id")
+    suspend fun setTags(id: String, tags: String): Int
+
+    @Query("UPDATE transactions SET recurring = :recurring WHERE id = :id AND amountCents > 0")
+    suspend fun setRecurring(id: String, recurring: Boolean): Int
+
+    /** Income: set the category and stop treating the row as a transfer. Money in only. */
+    @Query("UPDATE transactions SET categoryId = :categoryId, peerToPeer = 0 WHERE id = :id AND amountCents > 0")
+    suspend fun markAsIncome(id: String, categoryId: String): Int
+
+    /** Same as [markAsIncome] for all money in from [merchant]; payments to them are left alone. */
+    @Query("UPDATE transactions SET categoryId = :categoryId, peerToPeer = 0 WHERE merchant = :merchant AND amountCents > 0")
+    suspend fun markAsIncomeForMerchant(merchant: String, categoryId: String): Int
+
     @Query("SELECT * FROM transactions WHERE date >= :from ORDER BY date ASC")
     fun observeSince(from: LocalDate): Flow<List<TransactionEntity>>
 
@@ -31,8 +59,12 @@ interface TransactionDao {
     @Update
     suspend fun updateAll(rows: List<TransactionEntity>)
 
-    @Query("UPDATE transactions SET categoryId = :categoryId WHERE merchant = :merchant")
-    suspend fun setCategoryForMerchant(merchant: String, categoryId: String): Int
+    /** Moves the merchant's rows to [categoryId], except rows the user marked as income ([keep]). */
+    @Query(
+        "UPDATE transactions SET categoryId = :categoryId WHERE merchant = :merchant " +
+            "AND (categoryId IS NULL OR categoryId NOT IN (:keep))"
+    )
+    suspend fun setCategoryForMerchant(merchant: String, categoryId: String, keep: List<String>): Int
 
     @Query("UPDATE transactions SET categoryId = :categoryId WHERE id = :id")
     suspend fun setCategory(id: String, categoryId: String): Int
@@ -60,4 +92,7 @@ interface RuleDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAllIgnore(rules: List<RuleEntity>)
+
+    @Query("DELETE FROM rules WHERE id = :id")
+    suspend fun delete(id: String): Int
 }

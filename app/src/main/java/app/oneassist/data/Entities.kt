@@ -9,7 +9,9 @@ import app.oneassist.core.AccountSource
 import app.oneassist.core.Category
 import app.oneassist.core.CategoryKind
 import app.oneassist.core.CategoryRule
+import app.oneassist.core.DefaultCategories
 import app.oneassist.core.ImportSource
+import app.oneassist.core.Tags
 import app.oneassist.core.Transaction
 import java.time.LocalDate
 
@@ -31,12 +33,27 @@ data class TransactionEntity(
     val source: ImportSource,
     @ColumnInfo(defaultValue = "0") val peerToPeer: Boolean,
     val createdAt: Long,
+    /** User tags encoded with Tags.encode: ",a,b," or "". */
+    @ColumnInfo(defaultValue = "") val tags: String = "",
+    /** The user's own note. Stays on the device; never sent to the assistant. */
+    @ColumnInfo(defaultValue = "") val note: String = "",
+    /** Manual income that repeats monthly. */
+    @ColumnInfo(defaultValue = "0") val recurring: Boolean = false,
 ) {
     fun toModel() = Transaction(
         id = id, account = account, date = date, amountCents = amountCents, currency = currency,
         merchant = merchant, description = description, categoryId = categoryId, source = source,
-        peerToPeer = peerToPeer,
+        peerToPeer = peerToPeer, tags = Tags.decode(tags), note = note, recurring = recurring,
     )
+
+    companion object {
+        fun from(t: Transaction, createdAt: Long) = TransactionEntity(
+            id = t.id, account = t.account, date = t.date, amountCents = t.amountCents, currency = t.currency,
+            merchant = t.merchant, description = t.description, categoryId = t.categoryId, source = t.source,
+            peerToPeer = t.peerToPeer, createdAt = createdAt, tags = Tags.encode(t.tags), note = t.note,
+            recurring = t.recurring,
+        )
+    }
 }
 
 @Entity(tableName = "categories")
@@ -51,7 +68,9 @@ data class CategoryEntity(
 
 /**
  * Categorization rules. Default rules have id "default:<category>:<pattern>", learned rules
- * "learned:<pattern>" so correcting the same merchant again replaces the earlier rule.
+ * "learned:<pattern>" so correcting the same merchant again replaces the earlier rule. Learned
+ * income rules use "learned-income:<pattern>": they only apply to money coming in, so they live
+ * next to the expense rule for the same name (a friend you pay and who pays you back).
  */
 @Entity(tableName = "rules", indices = [Index("categoryId")])
 data class RuleEntity(
@@ -65,7 +84,11 @@ data class RuleEntity(
 
     companion object {
         fun from(rule: CategoryRule) = RuleEntity(
-            id = if (rule.learnedFromUser) "learned:${rule.pattern}" else "default:${rule.categoryId}:${rule.pattern}",
+            id = when {
+                !rule.learnedFromUser -> "default:${rule.categoryId}:${rule.pattern}"
+                rule.categoryId in DefaultCategories.incomeIds -> "learned-income:${rule.pattern}"
+                else -> "learned:${rule.pattern}"
+            },
             pattern = rule.pattern,
             categoryId = rule.categoryId,
             priority = rule.priority,

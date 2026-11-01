@@ -186,9 +186,17 @@ class RuleCategorizer(
         fun wordRegex(pattern: String): Regex =
             Regex("(?<![\\p{L}\\p{N}])" + Regex.escape(pattern.lowercase().trim()) + "(?![\\p{L}\\p{N}])")
 
-        /** The rule to save when the user moves a transaction with this merchant to [categoryId]. */
-        fun learnedRule(merchant: String, categoryId: String): CategoryRule =
-            CategoryRule(MerchantNormalizer.normalize(merchant).lowercase(), categoryId, LEARNED_PRIORITY, learnedFromUser = true)
+        /**
+         * The rule to save when the user moves a transaction with this merchant to [categoryId].
+         * Learned income rules rank just above other learned rules: for money in from a payer the
+         * user also pays (a friend), "income" wins, while payments out ignore income rules.
+         */
+        fun learnedRule(merchant: String, categoryId: String): CategoryRule = CategoryRule(
+            MerchantNormalizer.normalize(merchant).lowercase(),
+            categoryId,
+            if (categoryId in DefaultCategories.incomeIds) LEARNED_PRIORITY + 1 else LEARNED_PRIORITY,
+            learnedFromUser = true,
+        )
 
         fun withDefaults(extra: List<CategoryRule> = emptyList()) = RuleCategorizer(DefaultRules.all + extra)
     }

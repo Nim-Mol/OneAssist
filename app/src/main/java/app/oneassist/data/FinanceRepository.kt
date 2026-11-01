@@ -2,9 +2,12 @@ package app.oneassist.data
 
 import app.oneassist.core.AccountSource
 import app.oneassist.core.Category
+import app.oneassist.core.ExpectedIncome
 import app.oneassist.core.Leak
+import app.oneassist.core.ManualEntry
 import app.oneassist.core.SavingsTip
 import app.oneassist.core.Subscription
+import app.oneassist.core.TagTotal
 import app.oneassist.core.Transaction
 import kotlinx.coroutines.flow.Flow
 import java.time.YearMonth
@@ -16,6 +19,12 @@ data class MonthSummary(
     val spendingCents: Long,
     val spendingByCategory: Map<String, Long>,
     val previousMonthSpendingCents: Long,
+    /** Income per income category id (uncategorized money in counts as "income", Other income). */
+    val incomeByCategory: Map<String, Long> = emptyMap(),
+    /** (income - spending) / income, null without income. */
+    val savingsRate: Double? = null,
+    /** Recurring manual income expected this month. */
+    val expectedIncome: List<ExpectedIncome> = emptyList(),
 )
 
 data class ImportReport(val added: Int, val duplicates: Int, val skipped: List<String>)
@@ -25,7 +34,12 @@ data class ImportReport(val added: Int, val duplicates: Int, val skipped: List<S
  * Implemented by the back end (RoomFinanceRepository).
  */
 interface FinanceRepository {
-    fun transactions(month: YearMonth): Flow<List<Transaction>>
+    /** Transactions of [month], only those carrying [tag] when it is given. */
+    fun transactions(month: YearMonth, tag: String? = null): Flow<List<Transaction>>
+    /** Every tag in use, sorted. */
+    fun allTags(): Flow<List<String>>
+    /** Spending and income per tag in [month], biggest first. */
+    fun tagTotals(month: YearMonth): Flow<List<TagTotal>>
     fun categories(): Flow<List<Category>>
     fun monthSummary(month: YearMonth): Flow<MonthSummary>
     fun subscriptions(): Flow<List<Subscription>>
@@ -34,6 +48,21 @@ interface FinanceRepository {
 
     /** Change a transaction's category and learn a rule so similar ones follow. */
     suspend fun recategorize(transactionId: String, categoryId: String)
+
+    /** Replaces the transaction's tags (normalized, at most 10). */
+    suspend fun setTags(transactionId: String, tags: Set<String>)
+
+    /**
+     * Marks money coming in as income in [categoryId] and stops treating it as a transfer.
+     * With [alwaysForMerchant], a learned rule makes future money in from the same payer income too.
+     */
+    suspend fun markAsIncome(transactionId: String, categoryId: String, alwaysForMerchant: Boolean)
+
+    /** Stores a manual entry (source MANUAL) and returns its id. */
+    suspend fun addManual(entry: ManualEntry): String
+
+    /** Turns "repeats monthly" on or off for manual income. */
+    suspend fun setRecurring(transactionId: String, recurring: Boolean)
 
     suspend fun importCsv(text: String): ImportReport
     /** Runs on-device OCR on the image at [uri] and imports what it finds. */

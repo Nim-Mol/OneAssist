@@ -91,6 +91,13 @@ class IncomeTest {
         // The same person paid by the user is not income.
         assertEquals(DefaultCategories.TRANSFERS, c2.categorize("Jan de Vries", "Online bankieren", -1500))
         // A learned income rule also beats the default income words.
+        // Learned "pay Jan" (transfers) and "Jan pays me" (gift) live side by side.
+        val both = RuleCategorizer.withDefaults(listOf(
+            RuleCategorizer.learnedRule("Jan de Vries", DefaultCategories.TRANSFERS),
+            RuleCategorizer.learnedRule("Jan de Vries", DefaultCategories.GIFTS_RECEIVED),
+        ))
+        assertEquals(DefaultCategories.GIFTS_RECEIVED, both.categorize("Jan de Vries", "", 2000))
+        assertEquals(DefaultCategories.TRANSFERS, both.categorize("Jan de Vries", "", -2000))
         val employer = RuleCategorizer.learnedRule("Acme BV", DefaultCategories.FREELANCE)
         assertEquals(DefaultCategories.FREELANCE, RuleCategorizer.withDefaults(listOf(employer)).categorize("Acme BV", "Salaris", 10000))
     }
